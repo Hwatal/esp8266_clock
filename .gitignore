@@ -1,0 +1,6 @@
+*.o
+*.pyc
+build
+
+# vscode setting
+# .vscode

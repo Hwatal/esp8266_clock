@@ -1,0 +1,31 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/build/include",
+                "${workspaceFolder}/main",
+                "${workspaceFolder}/components/**",
+                "${env:IDF_PATH}/components/**",
+                "${env:IDF_PATH}/components/esp_common/include",
+                "${env:IDF_PATH}/components/esp8266/include",
+                "${env:IDF_PATH}/components/esp8266/include/driver",
+                "${env:IDF_PATH}/components/freertos/port/**",
+                "${env:IDF_PATH}/components/freertos/include/private",
+                "${env:IDF_PATH}/components/freertos/include",
+                "${env:IDF_PATH}/components/log/include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "__ESP_FILE__=__FILE__"
+            ],
+            "compilerPath": "D:/Project/esp/msys32/opt/xtensa-lx106-elf/bin/xtensa-lx106-elf-gcc.exe",
+            "cStandard": "gnu99",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "windows-gcc-x64"
+        }
+    ],
+    "version": 4
+}

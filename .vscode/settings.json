@@ -1,0 +1,24 @@
+{
+    "files.associations": {
+        "esp_system.h": "c",
+        "esp_err.h": "c",
+        "esp8266.h": "c",
+        "task.h": "c",
+        "freertos.h": "c",
+        "projdefs.h": "c",
+        "portable.h": "c",
+        "event_groups.h": "c",
+        "lcd12864.h": "c",
+        "time.h": "c",
+        "unistd.h": "c",
+        "demoactions.h": "c",
+        "rtc.h": "c",
+        "demoproc.h": "c",
+        "ec.h": "c",
+        "hmi_engine.h": "c",
+        "sgui_polarcoordinates.h": "c",
+        "screen.h": "c",
+        "stdlib.h": "c",
+        "stdio.h": "c"
+    }
+}
