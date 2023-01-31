@@ -4,7 +4,13 @@
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/event_groups.h>
+#include <freertos/queue.h>
+#include <freertos/semphr.h>
+#include <freertos/ringbuf.h>
+
+#include "DemoProc.h"
+
+extern RingbufHandle_t HMI_event_buffer;
 
 static const char *TAG = "encoder";
 
@@ -20,21 +26,33 @@ typedef struct {
     uint8_t a_num;
     uint8_t b_num;
     ec_direction_t direction;
-    EventGroupHandle_t event;
+    SemaphoreHandle_t touch;
     void (*cb[2])(void *param);
 }encoder_t;
 
-static void IRAM_ATTR ec_r(void *param) {
+static void ec_r(void *param) {
     encoder_t *handle = (encoder_t*)param;
-    xEventGroupSetBitsFromISR(handle->event, active_R, NULL);
+
+    KEY_PRESS_EVENT evt;
+    evt.Head.iSize = sizeof(evt);
+    evt.Head.iID = EVENT_ID_KEY_PRESS;
+    evt.Data.uiKeyValue = KEY_VALUE_DOWN;
+
+    xRingbufferSendFromISR(HMI_event_buffer, &evt, sizeof(evt), NULL);
 }
 
-static void IRAM_ATTR ec_l(void *param) {
+static void ec_l(void *param) {
     encoder_t *handle = (encoder_t*)param;
-    xEventGroupSetBitsFromISR(handle->event, active_L, NULL);
+
+    KEY_PRESS_EVENT evt;
+    evt.Head.iSize = sizeof(evt);
+    evt.Head.iID = EVENT_ID_KEY_PRESS;
+    evt.Data.uiKeyValue = KEY_VALUE_UP;
+
+    xRingbufferSendFromISR(HMI_event_buffer, &evt, sizeof(evt), NULL);
 }
 
-void ec_isr(void *param) {
+void IRAM_ATTR ec_isr(void *param) {
     static uint8_t intr_cnt = 0;
     static uint8_t last_level = 1;
     static uint8_t level = 1;
@@ -53,8 +71,10 @@ void ec_isr(void *param) {
             } else if (level == 0) {
                 handle->direction = 0;
             }
-            if (handle->direction < 2 && handle->cb[handle->direction] != NULL) {
-                handle->cb[handle->direction]((void*)handle);
+            BaseType_t task_woken = pdFALSE;
+            BaseType_t xResult = xSemaphoreGiveFromISR(handle->touch, &task_woken);
+            if (xResult == pdTRUE && task_woken == pdTRUE) {
+                portYIELD_FROM_ISR();
             }
         }
         intr_cnt = 0;
@@ -81,12 +101,17 @@ void init_ec_gpio(encoder_t *handle) {
 void task_ec_event(void *param) {
     encoder_t *handle = (encoder_t*)param;
     int cnt = 0;
-    EventBits_t bits = 0;
+    BaseType_t xResult = pdFALSE;
     while (1) {
-        bits = xEventGroupWaitBits(handle->event, active_L | active_R, 1, 0, portMAX_DELAY);
-        if (bits & active_L) {
+        xResult = xSemaphoreTake(handle->touch, portMAX_DELAY);
+
+        if (handle->direction < 2 && handle->cb[handle->direction] != NULL) {
+            handle->cb[handle->direction]((void*)handle);
+        }
+
+        if (handle->direction == EC_DIR_L) {
             cnt --;
-        } else if (bits & active_R) {
+        } else if (handle->direction == EC_DIR_R) {
             cnt ++;
         }
         ESP_LOGI(TAG, "direction: %d, %d\n", (int)handle->direction, cnt);
@@ -103,6 +128,6 @@ static encoder_t sEC = {
 
 void init_ec(void) {
     init_ec_gpio(&sEC);
-    sEC.event = xEventGroupCreate();
-    xTaskCreate(task_ec_event, "ec evt", 1024 / sizeof(StackType_t), &sEC, 13, NULL);
+    sEC.touch = xSemaphoreCreateBinary();
+    xTaskCreate(task_ec_event, "ec evt", 1024 / sizeof(StackType_t), &sEC, 10, NULL);
 }

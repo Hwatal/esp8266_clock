@@ -11,6 +11,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/ringbuf.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_spi_flash.h"
@@ -29,8 +30,8 @@ static const char *UART0_TAG = "UART0";
 static QueueHandle_t uart0_queue;
 #define UART0_BUF_SIZE (1024)
 #define RD_BUF_SIZE (UART0_BUF_SIZE)
-static int ukey_flags;
-static uint32_t keyvalue;
+
+RingbufHandle_t HMI_event_buffer;
 
 
 void init_pwrhold(void) {
@@ -73,15 +74,15 @@ static void uart_event_task(void *pvParameters)
                 // We'd better handler data event fast, there would be much more data events than
                 // other types of events. If we take too much time on data event, the queue might be full.
                 case UART_DATA:
-                    ESP_LOGI(UART0_TAG, "[UART DATA]: %d", event.size);
+                    // ESP_LOGI(UART0_TAG, "[UART DATA]: %d", event.size);
                     uart_read_bytes(EX_UART_NUM, dtmp, event.size, portMAX_DELAY);
                     if (event.size == 2) {
                         uint16_t key = 0;
                         key = *(uint16_t*)dtmp;
                         KeyPressEventProc(key);
                     }
-                    ESP_LOGI(UART0_TAG, "[DATA EVT]:");
-                    uart_write_bytes(EX_UART_NUM, (const char *) dtmp, event.size);
+                    // ESP_LOGI(UART0_TAG, "[DATA EVT]:");
+                    // uart_write_bytes(EX_UART_NUM, (const char *) dtmp, event.size);
                     break;
 
                 // Event of HW FIFO overflow detected
@@ -125,13 +126,24 @@ static void uart_event_task(void *pvParameters)
     vTaskDelete(NULL);
 }
 
+static void HMI_sync(void *param) {
+
+    while (1) {
+        size_t item_size = 0;
+        HMI_EVENT_BASE *item = xRingbufferReceive(HMI_event_buffer, &item_size, portMAX_DELAY);
+        ESP_LOGI("HMI", "[event]: %d", item->iID);
+        HMI_ProcessEvent(item);
+        vRingbufferReturnItem(HMI_event_buffer, (void*)item);
+    }
+}
+
 void app_main()
 {
     init_pwrhold();
-    
-    uart_driver_install(UART_NUM_0, UART0_BUF_SIZE, UART0_BUF_SIZE, 10, &uart0_queue, 0);
-    // Create a task to handler UART event from ISR
-    xTaskCreate(uart_event_task, "uart_event_task", 2048, NULL, 12, NULL);
+    screen_init();
+    InitializeHMIEngineObj();
+    HMI_event_buffer = xRingbufferCreate(512, RINGBUF_TYPE_NOSPLIT);
+    xTaskCreate(HMI_sync, "HMI sync", 2048, NULL, 15, NULL);
 
     printf("Hello world!\n");
     /* Print chip information */
@@ -145,13 +157,13 @@ void app_main()
     printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
             (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
 
+
     init_button();
     init_ec();
-    screen_init();
-    // Initialize HMI Engine.
-    KEY_PRESS_EVENT     stEvent;
+    // uart_driver_install(UART_NUM_0, UART0_BUF_SIZE, UART0_BUF_SIZE, 10, &uart0_queue, 0);
+    // // Create a task to handler UART event from ISR
+    // xTaskCreate(uart_event_task, "uart_event_task", 2048, NULL, 12, NULL);
 
-    InitializeHMIEngineObj();
     while(1) {
 
         vTaskDelay(250);

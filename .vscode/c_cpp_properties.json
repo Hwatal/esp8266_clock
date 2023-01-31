@@ -9,10 +9,10 @@
                 "${env:IDF_PATH}/components/**",
                 "${env:IDF_PATH}/components/esp_common/include",
                 "${env:IDF_PATH}/components/esp8266/include",
-                "${env:IDF_PATH}/components/esp8266/include/driver",
                 "${env:IDF_PATH}/components/freertos/port/**",
                 "${env:IDF_PATH}/components/freertos/include/private",
                 "${env:IDF_PATH}/components/freertos/include",
+                "${env:IDF_PATH}/components/esp_ringbuf/include",
                 "${env:IDF_PATH}/components/log/include"
             ],
             "defines": [
@@ -21,7 +21,7 @@
                 "_UNICODE",
                 "__ESP_FILE__=__FILE__"
             ],
-            "compilerPath": "D:/Project/esp/msys32/opt/xtensa-lx106-elf/bin/xtensa-lx106-elf-gcc.exe",
+            "compilerPath": "${env:ESP_ENV_PATH}/opt/xtensa-lx106-elf/bin/xtensa-lx106-elf-gcc.exe",
             "cStandard": "gnu99",
             "cppStandard": "gnu++14",
             "intelliSenseMode": "windows-gcc-x64"

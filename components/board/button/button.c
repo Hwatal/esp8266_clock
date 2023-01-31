@@ -2,9 +2,16 @@
 
 #include <esp_log.h>
 
+#include <driver/gpio.h>
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <driver/gpio.h>
+#include <freertos/queue.h>
+#include <freertos/ringbuf.h>
+
+#include "DemoProc.h"
+
+extern RingbufHandle_t HMI_event_buffer;
 
 static const char *TAG = "button";
 
@@ -39,10 +46,20 @@ static void PRESS_REPEAT_Handler(void *btn) {
 }
 
 static void SINGLE_CLICK_Handler(void *btn) {
+    KEY_PRESS_EVENT evt;
+    evt.Head.iSize = sizeof(evt);
+    evt.Head.iID = EVENT_ID_KEY_PRESS;
+    evt.Data.uiKeyValue = KEY_VALUE_ENTER;
+    xRingbufferSend(HMI_event_buffer, &evt, sizeof(evt), portMAX_DELAY);
     ESP_LOGI(TAG, "single click!\n");
 }
 
 static void DOUBLE_CLICK_Handler(void *btn) {
+    KEY_PRESS_EVENT evt;
+    evt.Head.iSize = sizeof(evt);
+    evt.Head.iID = EVENT_ID_KEY_PRESS;
+    evt.Data.uiKeyValue = KEY_VALUE_ESC;
+    xRingbufferSend(HMI_event_buffer, &evt, sizeof(evt), portMAX_DELAY);
     ESP_LOGI(TAG, "double click!\n");
 }
 

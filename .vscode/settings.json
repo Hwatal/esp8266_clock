@@ -19,6 +19,9 @@
         "sgui_polarcoordinates.h": "c",
         "screen.h": "c",
         "stdlib.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "gpio.h": "c",
+        "ringbuf.h": "c",
+        "esp_log.h": "c"
     }
 }

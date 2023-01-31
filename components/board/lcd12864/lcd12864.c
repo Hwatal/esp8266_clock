@@ -25,17 +25,17 @@ inline int lcd_write(uint8_t rs, uint8_t data)
     return spi_trans(HSPI_HOST, &trans);
 }
 
-esp_err_t lcd_write_cmd(uint8_t cmd)
+esp_err_t lcd_write_cmd(uint8_t cmd, uint32_t delayus)
 {
 	esp_err_t err = lcd_write(0, cmd);
-	lcd_udelay(200);
+	lcd_udelay(delayus);
 	return err;
 }
 
-esp_err_t lcd_write_data(uint8_t data)
+esp_err_t lcd_write_data(uint8_t data, uint32_t delayus)
 {
 	esp_err_t err = lcd_write(1, data);
-	lcd_udelay(200);
+	lcd_udelay(delayus);
 	return err;
 }
 
