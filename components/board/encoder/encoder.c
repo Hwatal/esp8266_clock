@@ -1,3 +1,4 @@
+
 #include "encoder.h"
 
 #include "esp_log.h"
@@ -38,7 +39,10 @@ static void ec_r(void *param) {
     evt.Head.iID = EVENT_ID_KEY_PRESS;
     evt.Data.uiKeyValue = KEY_VALUE_DOWN;
 
-    xRingbufferSendFromISR(HMI_event_buffer, &evt, sizeof(evt), NULL);
+    BaseType_t res = xRingbufferSend(HMI_event_buffer, &evt, sizeof(evt), portMAX_DELAY);
+    if (res == pdFALSE) {
+        ESP_LOGD(TAG, "send HMI_event error\n");
+    }
 }
 
 static void ec_l(void *param) {
@@ -49,7 +53,10 @@ static void ec_l(void *param) {
     evt.Head.iID = EVENT_ID_KEY_PRESS;
     evt.Data.uiKeyValue = KEY_VALUE_UP;
 
-    xRingbufferSendFromISR(HMI_event_buffer, &evt, sizeof(evt), NULL);
+    BaseType_t res = xRingbufferSend(HMI_event_buffer, &evt, sizeof(evt), portMAX_DELAY);
+    if (res == pdFALSE) {
+        ESP_LOGD(TAG, "send HMI_event error\n");
+    }
 }
 
 void IRAM_ATTR ec_isr(void *param) {
@@ -57,7 +64,7 @@ void IRAM_ATTR ec_isr(void *param) {
     static uint8_t last_level = 1;
     static uint8_t level = 1;
     encoder_t *handle = (encoder_t*)param;
-    
+
     if ((gpio_get_level(handle->a_num) == 0) && intr_cnt == 0) {
         last_level = gpio_get_level(handle->b_num);
         intr_cnt = 1;
@@ -101,20 +108,20 @@ void init_ec_gpio(encoder_t *handle) {
 void task_ec_event(void *param) {
     encoder_t *handle = (encoder_t*)param;
     int cnt = 0;
-    BaseType_t xResult = pdFALSE;
     while (1) {
-        xResult = xSemaphoreTake(handle->touch, portMAX_DELAY);
+        if (xSemaphoreTake(handle->touch, portMAX_DELAY)) {
 
-        if (handle->direction < 2 && handle->cb[handle->direction] != NULL) {
-            handle->cb[handle->direction]((void*)handle);
-        }
+            if (handle->direction < 2 && handle->cb[handle->direction] != NULL) {
+                handle->cb[handle->direction]((void*)handle);
+            }
 
-        if (handle->direction == EC_DIR_L) {
-            cnt --;
-        } else if (handle->direction == EC_DIR_R) {
-            cnt ++;
+            if (handle->direction == EC_DIR_L) {
+                cnt --;
+            } else if (handle->direction == EC_DIR_R) {
+                cnt ++;
+            }
+            ESP_LOGD(TAG, "direction: %s, %d\n", (handle->direction == EC_DIR_L ) ? "left" : "right", cnt);
         }
-        ESP_LOGI(TAG, "direction: %d, %d\n", (int)handle->direction, cnt);
     }
     
 }
@@ -129,5 +136,5 @@ static encoder_t sEC = {
 void init_ec(void) {
     init_ec_gpio(&sEC);
     sEC.touch = xSemaphoreCreateBinary();
-    xTaskCreate(task_ec_event, "ec evt", 1024 / sizeof(StackType_t), &sEC, 10, NULL);
+    xTaskCreate(task_ec_event, "ec evt", 2048 / sizeof(StackType_t), &sEC, 11, NULL);
 }

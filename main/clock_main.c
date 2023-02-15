@@ -8,164 +8,95 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/queue.h"
-#include "freertos/ringbuf.h"
-#include "esp_system.h"
+#include "freertos/event_groups.h"
+
 #include "esp_log.h"
-#include "esp_spi_flash.h"
+#include "esp_wifi.h"
+#include "esp_event_loop.h"
+#include "esp_smartconfig.h"
 
-#include "driver/gpio.h"
-#include "driver/uart.h"
+#include "tcpip_adapter.h"
+#include "smartconfig_ack.h"
 
-#include "button.h"
-#include "encoder.h"
-#include "lcd12864.h"
-
-#include "screen.h"
-#include "DemoProc.h"
-
-static const char *UART0_TAG = "UART0";
-static QueueHandle_t uart0_queue;
-#define UART0_BUF_SIZE (1024)
-#define RD_BUF_SIZE (UART0_BUF_SIZE)
-
-RingbufHandle_t HMI_event_buffer;
+#include "board.h"
 
 
-void init_pwrhold(void) {
-    gpio_config_t iocfg;
-    iocfg.intr_type = GPIO_INTR_DISABLE;
-    iocfg.mode = GPIO_MODE_OUTPUT;
-    iocfg.pin_bit_mask = BIT(GPIO_NUM_15);
-    iocfg.pull_up_en = GPIO_PULLUP_DISABLE;
-    iocfg.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    gpio_config(&iocfg);
-    gpio_set_level(GPIO_NUM_15, 1);
-}
+static EventGroupHandle_t wifi_event_group;
 
-void KeyPressEventProc(uint16_t key) {
-    KEY_PRESS_EVENT     key_event;
-
-    HMI_EVENT_INIT(key_event);
-
-    // key_event.Head.iType = EVENT_TYPE_ACTION;
-    key_event.Head.iID = EVENT_ID_KEY_PRESS;
-    key_event.Data.uiKeyValue = key;
-    // Post key press event.
-    HMI_ProcessEvent((HMI_EVENT_BASE*)(&key_event));
-}
-
-static void uart_event_task(void *pvParameters)
+static void default_event_handler(void* arg, esp_event_base_t event_base,
+                          int32_t event_id, void* event_data)
 {
-#define EX_UART_NUM UART_NUM_0
-    uart_event_t event;
-    uint8_t *dtmp = (uint8_t *) malloc(RD_BUF_SIZE);
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        xTaskCreate(smartconfig_example_task, "smartconfig_example_task", 4096, NULL, 3, NULL);
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        esp_wifi_connect();
+        xEventGroupClearBits(s_wifi_event_group, CONNECTED_BIT);
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        xEventGroupSetBits(s_wifi_event_group, CONNECTED_BIT);
+    } else if (event_base == SC_EVENT && event_id == SC_EVENT_SCAN_DONE) {
+        ESP_LOGI(TAG, "Scan done");
+    } else if (event_base == SC_EVENT && event_id == SC_EVENT_FOUND_CHANNEL) {
+        ESP_LOGI(TAG, "Found channel");
+    } else if (event_base == SC_EVENT && event_id == SC_EVENT_GOT_SSID_PSWD) {
+        ESP_LOGI(TAG, "Got SSID and password");
 
-    for (;;) {
-        // Waiting for UART event.
-        if (xQueueReceive(uart0_queue, (void *)&event, (portTickType)portMAX_DELAY)) {
-            bzero(dtmp, RD_BUF_SIZE);
-            ESP_LOGI(UART0_TAG, "uart[%d] event:", EX_UART_NUM);
+        smartconfig_event_got_ssid_pswd_t* evt = (smartconfig_event_got_ssid_pswd_t*)event_data;
+        wifi_config_t wifi_config;
+        uint8_t ssid[33] = { 0 };
+        uint8_t password[65] = { 0 };
+        uint8_t rvd_data[33] = { 0 };
 
-            switch (event.type) {
-                // Event of UART receving data
-                // We'd better handler data event fast, there would be much more data events than
-                // other types of events. If we take too much time on data event, the queue might be full.
-                case UART_DATA:
-                    // ESP_LOGI(UART0_TAG, "[UART DATA]: %d", event.size);
-                    uart_read_bytes(EX_UART_NUM, dtmp, event.size, portMAX_DELAY);
-                    if (event.size == 2) {
-                        uint16_t key = 0;
-                        key = *(uint16_t*)dtmp;
-                        KeyPressEventProc(key);
-                    }
-                    // ESP_LOGI(UART0_TAG, "[DATA EVT]:");
-                    // uart_write_bytes(EX_UART_NUM, (const char *) dtmp, event.size);
-                    break;
+        bzero(&wifi_config, sizeof(wifi_config_t));
+        memcpy(wifi_config.sta.ssid, evt->ssid, sizeof(wifi_config.sta.ssid));
+        memcpy(wifi_config.sta.password, evt->password, sizeof(wifi_config.sta.password));
+        wifi_config.sta.bssid_set = evt->bssid_set;
 
-                // Event of HW FIFO overflow detected
-                case UART_FIFO_OVF:
-                    ESP_LOGI(UART0_TAG, "hw fifo overflow");
-                    // If fifo overflow happened, you should consider adding flow control for your application.
-                    // The ISR has already reset the rx FIFO,
-                    // As an example, we directly flush the rx buffer here in order to read more data.
-                    uart_flush_input(EX_UART_NUM);
-                    xQueueReset(uart0_queue);
-                    break;
-
-                // Event of UART ring buffer full
-                case UART_BUFFER_FULL:
-                    ESP_LOGI(UART0_TAG, "ring buffer full");
-                    // If buffer full happened, you should consider encreasing your buffer size
-                    // As an example, we directly flush the rx buffer here in order to read more data.
-                    uart_flush_input(EX_UART_NUM);
-                    xQueueReset(uart0_queue);
-                    break;
-
-                case UART_PARITY_ERR:
-                    ESP_LOGI(UART0_TAG, "uart parity error");
-                    break;
-
-                // Event of UART frame error
-                case UART_FRAME_ERR:
-                    ESP_LOGI(UART0_TAG, "uart frame error");
-                    break;
-
-                // Others
-                default:
-                    ESP_LOGI(UART0_TAG, "uart event type: %d", event.type);
-                    break;
-            }
+        if (wifi_config.sta.bssid_set == true) {
+            memcpy(wifi_config.sta.bssid, evt->bssid, sizeof(wifi_config.sta.bssid));
         }
-    }
 
-    free(dtmp);
-    dtmp = NULL;
-    vTaskDelete(NULL);
+        memcpy(ssid, evt->ssid, sizeof(evt->ssid));
+        memcpy(password, evt->password, sizeof(evt->password));
+        ESP_LOGI(TAG, "SSID:%s", ssid);
+        ESP_LOGI(TAG, "PASSWORD:%s", password);
+        if (evt->type == SC_TYPE_ESPTOUCH_V2) {
+            ESP_ERROR_CHECK( esp_smartconfig_get_rvd_data(rvd_data, sizeof(rvd_data)) );
+            ESP_LOGI(TAG, "RVD_DATA:%s", rvd_data);
+        }
+
+        ESP_ERROR_CHECK(esp_wifi_disconnect());
+        ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
+        ESP_ERROR_CHECK(esp_wifi_connect());
+    } else if (event_base == SC_EVENT && event_id == SC_EVENT_SEND_ACK_DONE) {
+        xEventGroupSetBits(s_wifi_event_group, ESPTOUCH_DONE_BIT);
+    }
 }
 
-static void HMI_sync(void *param) {
+void init_wifi(void)
+{
+    wifi_event_group = xEventGroupCreate();
+    tcpip_adapter_init();
 
-    while (1) {
-        size_t item_size = 0;
-        HMI_EVENT_BASE *item = xRingbufferReceive(HMI_event_buffer, &item_size, portMAX_DELAY);
-        ESP_LOGI("HMI", "[event]: %d", item->iID);
-        HMI_ProcessEvent(item);
-        vRingbufferReturnItem(HMI_event_buffer, (void*)item);
-    }
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
+    ESP_ERROR_CHECK(esp_wifi_start());
+
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &default_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &default_event_handler, NULL));
+    /* start smartconfig */
+    // ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, &default_event_handler, NULL));
 }
 
 void app_main()
 {
-    init_pwrhold();
-    screen_init();
-    InitializeHMIEngineObj();
-    HMI_event_buffer = xRingbufferCreate(512, RINGBUF_TYPE_NOSPLIT);
-    xTaskCreate(HMI_sync, "HMI sync", 2048, NULL, 15, NULL);
-
-    printf("Hello world!\n");
-    /* Print chip information */
-    esp_chip_info_t chip_info;
-    esp_chip_info(&chip_info);
-    printf("This is ESP8266 chip with %d CPU cores, WiFi, ",
-            chip_info.cores);
-
-    printf("silicon revision %d, ", chip_info.revision);
-
-    printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
-            (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
-
-
-    init_button();
-    init_ec();
-    // uart_driver_install(UART_NUM_0, UART0_BUF_SIZE, UART0_BUF_SIZE, 10, &uart0_queue, 0);
-    // // Create a task to handler UART event from ISR
-    // xTaskCreate(uart_event_task, "uart_event_task", 2048, NULL, 12, NULL);
-
+    board_init();
     while(1) {
-
         vTaskDelay(250);
     }
 }

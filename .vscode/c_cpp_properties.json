@@ -5,7 +5,9 @@
             "includePath": [
                 "${workspaceFolder}/build/include",
                 "${workspaceFolder}/main",
-                "${workspaceFolder}/components/**",
+                "${workspaceFolder}/components/board/**",
+                "${workspaceFolder}/components/shell/include",
+                "${workspaceFolder}/components/simplegui/**",
                 "${env:IDF_PATH}/components/**",
                 "${env:IDF_PATH}/components/esp_common/include",
                 "${env:IDF_PATH}/components/esp8266/include",
@@ -13,7 +15,9 @@
                 "${env:IDF_PATH}/components/freertos/include/private",
                 "${env:IDF_PATH}/components/freertos/include",
                 "${env:IDF_PATH}/components/esp_ringbuf/include",
-                "${env:IDF_PATH}/components/log/include"
+                "${env:IDF_PATH}/components/esp_event/include",
+                "${env:IDF_PATH}/components/log/include",
+                "${env:IDF_PATH}/components/nvs_flash/include"
             ],
             "defines": [
                 "_DEBUG",

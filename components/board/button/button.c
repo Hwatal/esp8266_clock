@@ -88,5 +88,5 @@ void init_button(void) {
     button_attach(&btn0, LONG_PRESS_START, LONG_RRESS_START_Handler);
     button_start(&btn0);
 
-    xTaskCreate(button_loops, "button ticks", 2048 / sizeof(StackType_t), NULL, 10, NULL);
+    xTaskCreate(button_loops, "button ticks", 2048 / sizeof(StackType_t), NULL, 11, NULL);
 }

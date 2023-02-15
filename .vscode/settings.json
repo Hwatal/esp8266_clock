@@ -22,6 +22,16 @@
         "stdio.h": "c",
         "gpio.h": "c",
         "ringbuf.h": "c",
-        "esp_log.h": "c"
-    }
+        "esp_log.h": "c",
+        "queue.h": "c",
+        "i2c.h": "c",
+        "uart.h": "c",
+        "console.h": "c",
+        "freertosconfig.h": "c",
+        "esp_wifi.h": "c",
+        "tcpip_adapter.h": "c",
+        "esp_event_loop.h": "c",
+        "*.inc": "c"
+    },
+    "cmake.configureOnOpen": false
 }
