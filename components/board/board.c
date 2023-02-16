@@ -15,11 +15,13 @@
 #include "tcpip_adapter.h"
 
 #include "button.h"
-#include "encode.h"
-#include "sht30.h"
+#include "encoder.h"
+#include "interface.h"
 #include "screen.h"
 #include "DemoProc.h"
 #include "shell.h"
+
+#include "board.h"
 
 
 RingbufHandle_t HMI_event_buffer;
@@ -33,6 +35,18 @@ static void init_pwrhold(void) {
     iocfg.pull_down_en = GPIO_PULLDOWN_DISABLE;
     gpio_config(&iocfg);
     gpio_set_level(GPIO_NUM_15, 1);
+}
+
+static void init_gpio_default(void) {
+    gpio_config_t iocfg;
+    iocfg.intr_type = GPIO_INTR_DISABLE;
+    iocfg.mode = GPIO_MODE_DISABLE;
+    iocfg.pin_bit_mask = BIT(GPIO_NUM_0) | BIT(GPIO_NUM_2) | BIT(GPIO_NUM_4) | BIT(GPIO_NUM_5);
+    iocfg.pin_bit_mask |= BIT(GPIO_NUM_12) | BIT(GPIO_NUM_13) | BIT(GPIO_NUM_14) | BIT(GPIO_NUM_15);
+    iocfg.pull_up_en = GPIO_PULLUP_DISABLE;
+    iocfg.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    gpio_config(&iocfg);
+    // gpio_set_level(GPIO_NUM_15, 1);
 }
 
 static void HMI_sync(void *param) {
@@ -59,7 +73,7 @@ void board_init(void) {
 
     init_button();
     init_ec();
-    init_sensor_interface();
+    // init_sensor_interface();
 
     xTaskCreate(task_shell, "console", 4096 / sizeof(StackType_t), NULL, 7, NULL);
 

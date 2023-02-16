@@ -6,6 +6,7 @@
                 "${workspaceFolder}/build/include",
                 "${workspaceFolder}/main",
                 "${workspaceFolder}/components/board/**",
+                "${workspaceFolder}/components/network/**",
                 "${workspaceFolder}/components/shell/include",
                 "${workspaceFolder}/components/simplegui/**",
                 "${env:IDF_PATH}/components/**",

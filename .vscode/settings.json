@@ -31,7 +31,12 @@
         "esp_wifi.h": "c",
         "tcpip_adapter.h": "c",
         "esp_event_loop.h": "c",
-        "*.inc": "c"
+        "*.inc": "c",
+        "esp_netif.h": "c",
+        "wifi.h": "c",
+        "network.h": "c",
+        "esp_event.h": "c",
+        "shell.h": "c"
     },
     "cmake.configureOnOpen": false
 }

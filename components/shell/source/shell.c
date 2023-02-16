@@ -75,6 +75,7 @@ void task_shell(void *param)
     /* Register commands */
     esp_console_register_help_command();
     register_system();
+    register_smartconfig();
     // register_wifi();
 
     /* Prompt to be printed before each line.

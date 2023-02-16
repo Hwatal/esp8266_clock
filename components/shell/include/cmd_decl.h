@@ -14,6 +14,7 @@ extern "C" {
 
 #include "cmd_system.h"
 #include "cmd_wifi.h"
+#include "network.h"
 
 #ifdef __cplusplus
 }
